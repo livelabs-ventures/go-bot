@@ -19,7 +19,7 @@ vendor/
 go.work
 
 # Binary
-standup-bot
+/standup-bot
 
 # IDE specific files
 .idea/
