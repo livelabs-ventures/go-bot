@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -46,8 +47,8 @@ func TestManagerLoadSave(t *testing.T) {
 
 	// Test loading non-existent config
 	cfg, err := manager.Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v, want nil for non-existent config", err)
+	if err != ErrConfigNotFound {
+		t.Fatalf("Load() error = %v, want ErrConfigNotFound for non-existent config", err)
 	}
 	if cfg != nil {
 		t.Error("Load() = non-nil config, want nil for non-existent config")
@@ -105,8 +106,9 @@ func TestManagerExists(t *testing.T) {
 
 	// Create config
 	testConfig := &Config{
-		Repository: "test/repo",
-		Name:       "TestUser",
+		Repository:    "test/repo",
+		Name:          "TestUser",
+		LocalRepoPath: filepath.Join(tempDir, "repo"),
 	}
 	err = manager.Save(testConfig)
 	if err != nil {
@@ -185,15 +187,5 @@ func TestDefaultConfig(t *testing.T) {
 
 // Helper function
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr || len(s) > len(substr) && containsHelper(s[1:], substr)
-}
-
-func containsHelper(s, substr string) bool {
-	if len(s) < len(substr) {
-		return false
-	}
-	if s[:len(substr)] == substr {
-		return true
-	}
-	return containsHelper(s[1:], substr)
+	return strings.Contains(s, substr)
 }

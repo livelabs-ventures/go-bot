@@ -245,6 +245,13 @@ func TestSyncRepository(t *testing.T) {
 			mocks: []MockCommand{
 				{
 					Name:   "git",
+					Args:   []string{"branch", "-a"},
+					Dir:    repoPath,
+					Output: []byte("* main\n  remotes/origin/main\n"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
 					Args:   []string{"fetch", "--all"},
 					Dir:    repoPath,
 					Output: []byte("Fetching origin"),
@@ -255,6 +262,13 @@ func TestSyncRepository(t *testing.T) {
 					Args:   []string{"branch", "--show-current"},
 					Dir:    repoPath,
 					Output: []byte("main\n"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"rev-parse", "origin/main"},
+					Dir:    repoPath,
+					Output: []byte("abc123"),
 					Error:  nil,
 				},
 				{
@@ -270,6 +284,13 @@ func TestSyncRepository(t *testing.T) {
 		{
 			name: "fetch fails",
 			mocks: []MockCommand{
+				{
+					Name:   "git",
+					Args:   []string{"branch", "-a"},
+					Dir:    repoPath,
+					Output: []byte("* main\n"),
+					Error:  nil,
+				},
 				{
 					Name:   "git",
 					Args:   []string{"fetch", "--all"},
@@ -337,7 +358,14 @@ func TestCommitAndPush(t *testing.T) {
 				},
 				{
 					Name:   "git",
-					Args:   []string{"push"},
+					Args:   []string{"branch", "--show-current"},
+					Dir:    repoPath,
+					Output: []byte("main\n"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"push", "-u", "origin", "main"},
 					Dir:    repoPath,
 					Output: []byte("Everything up-to-date"),
 					Error:  nil,

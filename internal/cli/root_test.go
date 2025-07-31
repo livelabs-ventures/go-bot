@@ -5,11 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/standup-bot/standup-bot/pkg/config"
-	"github.com/standup-bot/standup-bot/pkg/standup"
 )
 
 func TestExecute(t *testing.T) {
@@ -44,7 +41,7 @@ func TestExecute(t *testing.T) {
 	}
 }
 
-func TestRunConfiguration(t *testing.T) {
+func TestRunStandup(t *testing.T) {
 	// Create temp directory for config
 	tempDir, err := os.MkdirTemp("", "standup-bot-test")
 	if err != nil {
@@ -52,53 +49,53 @@ func TestRunConfiguration(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Note: Full integration testing of runConfiguration would require
+	// Note: Full integration testing of runStandup would require
 	// mocking stdin/stdout and the git client, which is complex.
 	// For unit tests, we test the individual components separately.
 	
 	// Here we just verify the function exists and can be called
-	_ = runConfiguration
+	_ = runStandup
 }
 
-func TestRunStandupWorkflow(t *testing.T) {
-	// Create test configuration
-	cfg := &config.Config{
-		Repository:    "test/repo",
-		Name:          "TestUser",
-		LocalRepoPath: "/tmp/test-repo",
+func TestFlags(t *testing.T) {
+	// Test that all flags are properly initialized
+	tests := []struct {
+		name     string
+		flagName string
+		expected interface{}
+	}{
+		{"config flag", "config", false},
+		{"direct flag", "direct", false},
+		{"merge flag", "merge", false},
+		{"name flag", "name", ""},
 	}
 
-	// Note: Full integration testing would require mocking all the git operations
-	// and stdin/stdout interactions. For unit tests, we test components separately.
-	
-	// Here we just verify the function exists and can be called
-	_ = runStandupWorkflow
-	_ = cfg
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flag := rootCmd.Flag(tt.flagName)
+			if flag == nil {
+				t.Errorf("Flag %s not found", tt.flagName)
+			}
+		})
+	}
 }
 
-func TestSaveTempStandup(t *testing.T) {
-	// Create test entry
-	entry := &standup.Entry{
-		Date:      time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
-		Yesterday: []string{"Did something", "Did another thing"},
-		Today:     []string{"Will do this", "Will do that"},
-		Blockers:  "None",
+func TestRootCommand(t *testing.T) {
+	// Test root command properties
+	if rootCmd.Use != "standup-bot" {
+		t.Errorf("Root command Use = %v, want standup-bot", rootCmd.Use)
 	}
 
-	tempFile := saveTempStandup(entry, "TestUser")
-
-	// Check file was created
-	if _, err := os.Stat(tempFile); os.IsNotExist(err) {
-		t.Error("Temp file was not created")
+	if rootCmd.Short == "" {
+		t.Error("Root command should have a short description")
 	}
 
-	// Clean up
-	os.Remove(tempFile)
+	if rootCmd.Long == "" {
+		t.Error("Root command should have a long description")
+	}
 
-	// Verify file path format
-	expectedPrefix := "/tmp/standup-TestUser-2024-01-31"
-	if !strings.HasPrefix(tempFile, expectedPrefix) {
-		t.Errorf("Temp file path = %v, want prefix %v", tempFile, expectedPrefix)
+	if rootCmd.RunE == nil {
+		t.Error("Root command should have a RunE function")
 	}
 }
 

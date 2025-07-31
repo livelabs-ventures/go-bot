@@ -54,12 +54,12 @@ func NewClientWithRunner(runner CommandRunner) *Client {
 func (c *Client) CheckGHInstalled() error {
 	output, err := c.runner.Run("gh", "--version")
 	if err != nil {
-		return fmt.Errorf("GitHub CLI not found. Please install it from https://cli.github.com/")
+		return fmt.Errorf("GitHub CLI not found: %w. Please install it from https://cli.github.com/", err)
 	}
 
 	// Verify it's actually gh by checking output
 	if !strings.Contains(string(output), "gh version") {
-		return fmt.Errorf("gh command found but appears to be incorrect")
+		return fmt.Errorf("gh command found but appears to be incorrect: output=%s", string(output))
 	}
 
 	return nil
@@ -69,7 +69,7 @@ func (c *Client) CheckGHInstalled() error {
 func (c *Client) CheckAuthenticated() error {
 	_, err := c.runner.Run("gh", "auth", "status")
 	if err != nil {
-		return fmt.Errorf("not authenticated with GitHub. Please run 'gh auth login'")
+		return fmt.Errorf("not authenticated with GitHub: %w. Please run 'gh auth login'", err)
 	}
 	return nil
 }
@@ -93,48 +93,82 @@ func (c *Client) CloneRepository(repo, targetPath string) error {
 
 // SyncRepository syncs the repository with the remote
 func (c *Client) SyncRepository(repoPath string) error {
-	// First, check if there are any branches (empty repo check)
-	branchListOutput, err := c.runner.RunInDir(repoPath, "git", "branch", "-a")
-	if err != nil {
-		return fmt.Errorf("failed to list branches: %w", err)
-	}
-	
-	// If no branches, this is an empty repo - nothing to sync
-	if strings.TrimSpace(string(branchListOutput)) == "" {
-		return nil
+	// Check if this is an empty repository
+	if isEmpty, err := c.isEmptyRepository(repoPath); err != nil {
+		return fmt.Errorf("failed to check repository state: %w", err)
+	} else if isEmpty {
+		return nil // Nothing to sync in empty repo
 	}
 
 	// Fetch all changes
-	output, err := c.runner.RunInDir(repoPath, "git", "fetch", "--all")
-	if err != nil {
-		return fmt.Errorf("failed to fetch: %w\nOutput: %s", err, string(output))
+	if err := c.fetchAll(repoPath); err != nil {
+		return fmt.Errorf("failed to fetch remote changes: %w", err)
 	}
 
 	// Get current branch
-	branchOutput, err := c.runner.RunInDir(repoPath, "git", "branch", "--show-current")
+	branch, err := c.getCurrentBranch(repoPath)
 	if err != nil {
-		return fmt.Errorf("failed to get current branch: %w", err)
+		return fmt.Errorf("failed to determine current branch: %w", err)
 	}
-	branch := strings.TrimSpace(string(branchOutput))
 
-	// If no branch (detached HEAD or empty repo), nothing to sync
 	if branch == "" {
-		return nil
+		return nil // Detached HEAD state, nothing to sync
 	}
 
-	// Check if origin/branch exists
-	_, err = c.runner.RunInDir(repoPath, "git", "rev-parse", fmt.Sprintf("origin/%s", branch))
+	// Check if remote branch exists
+	if exists, err := c.remoteBranchExists(repoPath, branch); err != nil {
+		return fmt.Errorf("failed to check remote branch: %w", err)
+	} else if !exists {
+		return nil // Remote branch doesn't exist yet
+	}
+
+	// Reset to remote branch
+	if err := c.resetToRemote(repoPath, branch); err != nil {
+		return fmt.Errorf("failed to sync with remote: %w", err)
+	}
+
+	return nil
+}
+
+// isEmptyRepository checks if the repository has any branches
+func (c *Client) isEmptyRepository(repoPath string) (bool, error) {
+	output, err := c.runner.RunInDir(repoPath, "git", "branch", "-a")
 	if err != nil {
-		// Remote branch doesn't exist yet, nothing to sync
-		return nil
+		return false, err
 	}
+	return strings.TrimSpace(string(output)) == "", nil
+}
 
-	// Reset to origin/branch
-	output, err = c.runner.RunInDir(repoPath, "git", "reset", "--hard", fmt.Sprintf("origin/%s", branch))
+// fetchAll fetches all remote changes
+func (c *Client) fetchAll(repoPath string) error {
+	output, err := c.runner.RunInDir(repoPath, "git", "fetch", "--all")
 	if err != nil {
-		return fmt.Errorf("failed to reset to origin: %w\nOutput: %s", err, string(output))
+		return fmt.Errorf("%w (output: %s)", err, string(output))
 	}
+	return nil
+}
 
+// getCurrentBranch returns the current branch name
+func (c *Client) getCurrentBranch(repoPath string) (string, error) {
+	output, err := c.runner.RunInDir(repoPath, "git", "branch", "--show-current")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// remoteBranchExists checks if a branch exists on the remote
+func (c *Client) remoteBranchExists(repoPath, branch string) (bool, error) {
+	_, err := c.runner.RunInDir(repoPath, "git", "rev-parse", fmt.Sprintf("origin/%s", branch))
+	return err == nil, nil
+}
+
+// resetToRemote resets the current branch to match the remote
+func (c *Client) resetToRemote(repoPath, branch string) error {
+	output, err := c.runner.RunInDir(repoPath, "git", "reset", "--hard", fmt.Sprintf("origin/%s", branch))
+	if err != nil {
+		return fmt.Errorf("%w (output: %s)", err, string(output))
+	}
 	return nil
 }
 
@@ -150,51 +184,95 @@ func (c *Client) Commit(repoPath, message string) ([]byte, error) {
 
 // CommitAndPush commits changes and pushes to remote
 func (c *Client) CommitAndPush(repoPath, message string) error {
-	// Add all changes
-	output, err := c.runner.RunInDir(repoPath, "git", "add", ".")
-	if err != nil {
-		return fmt.Errorf("failed to add changes: %w\nOutput: %s", err, string(output))
+	// Stage all changes
+	if err := c.stageAllChanges(repoPath); err != nil {
+		return fmt.Errorf("failed to stage changes: %w", err)
 	}
 
 	// Check if there are changes to commit
-	statusOutput, err := c.runner.RunInDir(repoPath, "git", "status", "--porcelain")
+	hasChanges, err := c.hasUncommittedChanges(repoPath)
 	if err != nil {
-		return fmt.Errorf("failed to check status: %w", err)
+		return fmt.Errorf("failed to check for changes: %w", err)
 	}
 
-	if len(bytes.TrimSpace(statusOutput)) == 0 {
-		return fmt.Errorf("no changes to commit")
+	if !hasChanges {
+		return ErrNoChangesToCommit
 	}
 
 	// Commit changes
-	output, err = c.runner.RunInDir(repoPath, "git", "commit", "-m", message)
-	if err != nil {
-		return fmt.Errorf("failed to commit: %w\nOutput: %s", err, string(output))
+	if err := c.createCommit(repoPath, message); err != nil {
+		return fmt.Errorf("failed to create commit: %w", err)
 	}
 
-	// Get current branch
-	branchOutput, err := c.runner.RunInDir(repoPath, "git", "branch", "--show-current")
+	// Get or create branch
+	branch, err := c.ensureBranch(repoPath)
 	if err != nil {
-		return fmt.Errorf("failed to get current branch: %w", err)
+		return fmt.Errorf("failed to determine branch: %w", err)
 	}
-	branch := strings.TrimSpace(string(branchOutput))
 
-	// If no branch, we need to create main branch
+	// Push changes
+	if err := c.pushWithUpstream(repoPath, branch); err != nil {
+		return fmt.Errorf("failed to push to remote: %w", err)
+	}
+
+	return nil
+}
+
+// ErrNoChangesToCommit indicates there are no changes to commit
+var ErrNoChangesToCommit = fmt.Errorf("no changes to commit")
+
+// stageAllChanges adds all changes to the staging area
+func (c *Client) stageAllChanges(repoPath string) error {
+	output, err := c.runner.RunInDir(repoPath, "git", "add", ".")
+	if err != nil {
+		return fmt.Errorf("%w (output: %s)", err, string(output))
+	}
+	return nil
+}
+
+// hasUncommittedChanges checks if there are uncommitted changes
+func (c *Client) hasUncommittedChanges(repoPath string) (bool, error) {
+	output, err := c.runner.RunInDir(repoPath, "git", "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return len(bytes.TrimSpace(output)) > 0, nil
+}
+
+// createCommit creates a commit with the given message
+func (c *Client) createCommit(repoPath, message string) error {
+	output, err := c.runner.RunInDir(repoPath, "git", "commit", "-m", message)
+	if err != nil {
+		return fmt.Errorf("%w (output: %s)", err, string(output))
+	}
+	return nil
+}
+
+// ensureBranch gets the current branch or creates main if in detached HEAD
+func (c *Client) ensureBranch(repoPath string) (string, error) {
+	branch, err := c.getCurrentBranch(repoPath)
+	if err != nil {
+		return "", err
+	}
+
 	if branch == "" {
+		// Detached HEAD state, create main branch
 		branch = "main"
-		// Create main branch
-		output, err = c.runner.RunInDir(repoPath, "git", "checkout", "-b", branch)
+		output, err := c.runner.RunInDir(repoPath, "git", "checkout", "-b", branch)
 		if err != nil {
-			return fmt.Errorf("failed to create main branch: %w\nOutput: %s", err, string(output))
+			return "", fmt.Errorf("failed to create main branch: %w (output: %s)", err, string(output))
 		}
 	}
 
-	// Push changes (use -u for first push to set upstream)
-	output, err = c.runner.RunInDir(repoPath, "git", "push", "-u", "origin", branch)
-	if err != nil {
-		return fmt.Errorf("failed to push: %w\nOutput: %s", err, string(output))
-	}
+	return branch, nil
+}
 
+// pushWithUpstream pushes the branch and sets upstream if needed
+func (c *Client) pushWithUpstream(repoPath, branch string) error {
+	output, err := c.runner.RunInDir(repoPath, "git", "push", "-u", "origin", branch)
+	if err != nil {
+		return fmt.Errorf("%w (output: %s)", err, string(output))
+	}
 	return nil
 }
 
@@ -223,25 +301,70 @@ func (c *Client) PushBranch(repoPath, branchName string) error {
 	return nil
 }
 
+// PullRequestOptions contains options for creating a pull request
+type PullRequestOptions struct {
+	Title string
+	Body  string
+	Base  string
+}
+
 // CreatePullRequest creates a pull request using GitHub CLI
 func (c *Client) CreatePullRequest(repoPath, title, body string) error {
-	// Create the PR with title and body
-	output, err := c.runner.RunInDir(repoPath, "gh", "pr", "create", 
-		"--title", title,
-		"--body", body,
-		"--base", "main")
+	opts := PullRequestOptions{
+		Title: title,
+		Body:  body,
+		Base:  "main",
+	}
+	return c.CreatePullRequestWithOptions(repoPath, opts)
+}
+
+// CreatePullRequestWithOptions creates a pull request with custom options
+func (c *Client) CreatePullRequestWithOptions(repoPath string, opts PullRequestOptions) error {
+	args := []string{"pr", "create", "--title", opts.Title, "--body", opts.Body}
+	if opts.Base != "" {
+		args = append(args, "--base", opts.Base)
+	}
+
+	output, err := c.runner.RunInDir(repoPath, "gh", args...)
 	if err != nil {
-		return fmt.Errorf("failed to create pull request: %w\nOutput: %s", err, string(output))
+		return fmt.Errorf("failed to create pull request: %w (output: %s)", err, string(output))
 	}
 	return nil
 }
 
-// MergePullRequest merges a pull request using GitHub CLI
+// MergeOptions contains options for merging a pull request
+type MergeOptions struct {
+	Auto         bool
+	Squash       bool
+	DeleteBranch bool
+}
+
+// MergePullRequest merges a pull request using GitHub CLI with default options
 func (c *Client) MergePullRequest(repoPath string) error {
-	// Auto-merge the PR with squash
-	output, err := c.runner.RunInDir(repoPath, "gh", "pr", "merge", "--auto", "--squash", "--delete-branch")
+	opts := MergeOptions{
+		Auto:         true,
+		Squash:       true,
+		DeleteBranch: true,
+	}
+	return c.MergePullRequestWithOptions(repoPath, opts)
+}
+
+// MergePullRequestWithOptions merges a pull request with custom options
+func (c *Client) MergePullRequestWithOptions(repoPath string, opts MergeOptions) error {
+	args := []string{"pr", "merge"}
+	if opts.Auto {
+		args = append(args, "--auto")
+	}
+	if opts.Squash {
+		args = append(args, "--squash")
+	}
+	if opts.DeleteBranch {
+		args = append(args, "--delete-branch")
+	}
+
+	output, err := c.runner.RunInDir(repoPath, "gh", args...)
 	if err != nil {
-		return fmt.Errorf("failed to merge pull request: %w\nOutput: %s", err, string(output))
+		return fmt.Errorf("failed to merge pull request: %w (output: %s)", err, string(output))
 	}
 	return nil
 }
@@ -285,13 +408,33 @@ func (c *Client) PullBranch(repoPath, branchName string) error {
 	return nil
 }
 
+// PRInfo contains information about a pull request
+type PRInfo struct {
+	Exists bool
+	Number string
+}
+
 // PRExistsForBranch checks if a PR exists for the given branch
 func (c *Client) PRExistsForBranch(repoPath, branchName string) (bool, string) {
-	output, err := c.runner.RunInDir(repoPath, "gh", "pr", "list", "--head", branchName, "--json", "number", "--jq", ".[0].number")
+	info := c.GetPRInfoForBranch(repoPath, branchName)
+	return info.Exists, info.Number
+}
+
+// GetPRInfoForBranch retrieves PR information for a specific branch
+func (c *Client) GetPRInfoForBranch(repoPath, branchName string) PRInfo {
+	output, err := c.runner.RunInDir(repoPath, "gh", "pr", "list", 
+		"--head", branchName, 
+		"--json", "number", 
+		"--jq", ".[0].number")
+	
 	if err != nil || strings.TrimSpace(string(output)) == "" {
-		return false, ""
+		return PRInfo{Exists: false, Number: ""}
 	}
-	return true, strings.TrimSpace(string(output))
+	
+	return PRInfo{
+		Exists: true,
+		Number: strings.TrimSpace(string(output)),
+	}
 }
 
 // UpdatePullRequest updates the body of an existing PR
