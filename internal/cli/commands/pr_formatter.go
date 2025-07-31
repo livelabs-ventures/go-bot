@@ -10,7 +10,7 @@ import (
 
 // FormatDailyPRBody formats the PR body with all standups for the day
 func FormatDailyPRBody(repoPath string, date time.Time) string {
-	body := fmt.Sprintf("# Daily Standups - %s\n\n", date.Format("2006-01-02"))
+	body := fmt.Sprintf("**Daily Standups - %s**\n\n", date.Format("2006-01-02"))
 	
 	// Read all standup files for today
 	standupDir := filepath.Join(repoPath, "stand-ups")
@@ -36,7 +36,7 @@ func FormatDailyPRBody(repoPath string, date time.Time) string {
 		
 		// Parse today's standup from the content
 		if todayStandup := extractTodayStandup(string(content), date); todayStandup != "" {
-			body += fmt.Sprintf("## %s\n\n%s\n\n---\n\n", userName, todayStandup)
+			body += fmt.Sprintf("**%s**\n\n%s\n\n---\n\n", userName, todayStandup)
 		}
 	}
 	
@@ -65,8 +65,18 @@ func extractTodayStandup(content string, date time.Time) string {
 			if strings.HasPrefix(line, "## ") || line == "---" {
 				break
 			}
-			// Collect content for today
-			todayContent = append(todayContent, line)
+			
+			// Convert markdown headers to slack-friendly format
+			if strings.HasPrefix(line, "**Yesterday:**") {
+				todayContent = append(todayContent, "*Yesterday:*")
+			} else if strings.HasPrefix(line, "**Today:**") {
+				todayContent = append(todayContent, "*Today:*")
+			} else if strings.HasPrefix(line, "**Blockers:**") {
+				todayContent = append(todayContent, "*Blockers:*")
+			} else {
+				// Keep bullet points as they are
+				todayContent = append(todayContent, line)
+			}
 		}
 	}
 	
