@@ -25,7 +25,7 @@ A simple and efficient CLI tool for managing daily standup updates via GitHub. T
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/go-bot.git
+git clone https://github.com/livelabs-ventures/go-bot.git
 cd go-bot
 
 # Build the binary
