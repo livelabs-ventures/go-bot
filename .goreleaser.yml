@@ -60,3 +60,60 @@ release:
     name: go-bot
   draft: false
   prerelease: auto
+
+# Homebrew Formula
+brews:
+  - name: standup-bot
+    ids:
+      - standup-bot
+    
+    # GitHub repository to push the formula to
+    repository:
+      owner: livelabs-ventures
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    
+    # Directory inside the repository to put the formula
+    directory: Formula
+    
+    # Git commit information
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    
+    # Your app's homepage
+    homepage: "https://github.com/livelabs-ventures/go-bot"
+    
+    # Your app's description
+    description: "CLI tool for managing daily standup updates via GitHub"
+    
+    # License
+    license: "MIT"
+    
+    # Dependencies
+    dependencies:
+      - name: gh
+        type: optional
+    
+    # Custom install script
+    install: |
+      bin.install "standup-bot"
+    
+    # Caveats for the user of your binary
+    caveats: |
+      The standup-bot requires GitHub CLI (gh) to be installed and authenticated.
+      
+      Install GitHub CLI:
+        brew install gh
+      
+      Then authenticate:
+        gh auth login
+      
+      Configure standup-bot:
+        standup-bot --config
+    
+    # Test script
+    test: |
+      system "#{bin}/standup-bot --version"

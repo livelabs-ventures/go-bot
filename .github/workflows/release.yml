@@ -27,13 +27,6 @@ jobs:
       - name: Run tests
         run: make test
 
-      - name: Debug directory structure
-        run: |
-          pwd
-          ls -la
-          ls -la cmd/
-          ls -la cmd/standup-bot/
-          
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -42,5 +35,5 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # If you want to publish to a homebrew tap, you'll need a token with repo scope
-          # HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          # This token needs 'repo' scope to push to the homebrew-tap repository
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
