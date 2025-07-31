@@ -6,7 +6,7 @@ before:
 
 builds:
   - id: standup-bot
-    main: ./cmd/standup-bot
+    main: ./cmd/standup-bot/main.go
     binary: standup-bot
     env:
       - CGO_ENABLED=0
