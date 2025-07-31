@@ -15,6 +15,12 @@ var (
 	nameFlag   string
 	jsonFlag   string
 	outputFlag string
+	
+	// Version information
+	version string
+	commit  string
+	date    string
+	
 	rootCmd    = &cobra.Command{
 		Use:   "standup-bot",
 		Short: "A simple CLI tool for daily standup updates via GitHub",
@@ -69,8 +75,37 @@ func init() {
 	rootCmd.Flags().StringVar(&jsonFlag, "json", "", "Accept standup data as JSON (direct string, file path, or '-' for stdin)")
 	rootCmd.Flags().StringVar(&outputFlag, "output", "", "Output format: 'json' for machine-readable output")
 	
+	// Set version template
+	rootCmd.Version = buildVersion()
+	rootCmd.SetVersionTemplate(`{{with .Name}}{{printf "%s " .}}{{end}}{{printf "version %s" .Version}}
+`)
+	
 	// Add subcommands
 	rootCmd.AddCommand(mcpServerCmd)
+}
+
+// SetVersionInfo sets the version information for the CLI
+func SetVersionInfo(v, c, d string) {
+	version = v
+	commit = c
+	date = d
+}
+
+// buildVersion creates the version string
+func buildVersion() string {
+	if version == "" {
+		version = "dev"
+	}
+	
+	versionStr := version
+	if commit != "" && commit != "none" {
+		versionStr += fmt.Sprintf(" (commit: %s)", commit)
+	}
+	if date != "" && date != "unknown" {
+		versionStr += fmt.Sprintf(" built at %s", date)
+	}
+	
+	return versionStr
 }
 
 // Execute runs the root command

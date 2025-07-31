@@ -35,3 +35,7 @@ Thumbs.db
 # Local environment files
 .env
 .env.local
+
+# Goreleaser artifacts
+dist/
+.goreleaser.yml.bak

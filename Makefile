@@ -51,3 +51,19 @@ deps:
 update-deps:
 	go get -u ./...
 	go mod tidy
+
+# Create a new release
+release:
+	@./scripts/release.sh
+
+# Test homebrew formula locally
+test-homebrew:
+	@./scripts/test-homebrew-local.sh
+
+# Run goreleaser in snapshot mode (dry run)
+release-snapshot:
+	goreleaser release --snapshot --clean --skip=publish
+
+# Check goreleaser configuration
+release-check:
+	goreleaser check

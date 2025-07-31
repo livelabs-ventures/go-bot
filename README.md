@@ -22,6 +22,22 @@ A simple and efficient CLI tool for managing daily standup updates via GitHub. T
 
 ## Installation
 
+### Homebrew (macOS and Linux)
+
+The easiest way to install standup-bot is via Homebrew:
+
+```bash
+# Add the tap (only needed once)
+brew tap livelabs-ventures/tap
+
+# Install standup-bot
+brew install standup-bot
+```
+
+### Download Binary
+
+Download the pre-built binary for your platform from the [releases page](https://github.com/livelabs-ventures/go-bot/releases).
+
 ### From Source
 
 ```bash
@@ -36,9 +52,13 @@ make build
 make install
 ```
 
-### Binary Distribution
+### Using Go Install
 
-Download the pre-built binary for your platform from the releases page.
+If you have Go installed, you can use:
+
+```bash
+go install github.com/standup-bot/standup-bot/cmd/standup-bot@latest
+```
 
 ## Quick Start
 
@@ -174,7 +194,7 @@ The standup-bot includes an MCP (Model Context Protocol) server for integration 
 
 ```bash
 # Add the MCP server using Claude Code CLI
-claude-code mcp add standup-bot /path/to/standup-bot --args "mcp-server"
+claude mcp add standup-bot /path/to/standup-bot mcp-server
 ```
 
 That's it! Now you can ask Claude to "submit my standup" and it will use the standup-bot directly.

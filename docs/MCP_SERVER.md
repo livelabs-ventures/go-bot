@@ -88,20 +88,20 @@ The easiest way to add the standup-bot MCP server to Claude Code is using the CL
 
 ```bash
 # Add globally (available in all projects)
-claude-code mcp add standup-bot /path/to/standup-bot --args "mcp-server"
+claude mcp add standup-bot /path/to/standup-bot mcp-server
 
 # Or add to current project only
-claude-code mcp add standup-bot /path/to/standup-bot --args "mcp-server" --project
+claude mcp add standup-bot /path/to/standup-bot mcp-server --project
 ```
 
 To remove:
 ```bash
-claude-code mcp remove standup-bot
+claude mcp remove standup-bot
 ```
 
 To list all MCP servers:
 ```bash
-claude-code mcp list
+claude mcp list
 ```
 
 ### Usage Example
