@@ -2,6 +2,24 @@
 
 This guide explains how to use standup-bot programmatically from scripts, CI/CD pipelines, or other tools like Claude Code.
 
+## Prerequisites
+
+Before using standup-bot in scripts:
+
+1. **Ensure the standup repository exists**:
+   - The repository specified in your config must be created beforehand
+   - You must have write access to this repository
+
+2. **GitHub CLI must be authenticated**:
+   ```bash
+   gh auth status
+   ```
+
+3. **Standup-bot must be configured**:
+   ```bash
+   standup-bot --config
+   ```
+
 ## JSON Input Format
 
 The standup bot accepts JSON input with the following structure:

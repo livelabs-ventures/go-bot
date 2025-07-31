@@ -17,8 +17,31 @@ A simple and efficient CLI tool for managing daily standup updates via GitHub. T
 
 - Go 1.21+ (for building from source)
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
-- Git repository for storing standups
-- GitHub-Slack integration configured for your repository
+- Git repository for storing standups (**must be created beforehand**)
+- GitHub-Slack integration configured for your repository (optional)
+
+### ⚠️ Important Setup Requirements
+
+Before using standup-bot, you **must**:
+
+1. **Create the standup repository first**:
+   ```bash
+   # Create a new repository on GitHub (replace with your org/repo name)
+   gh repo create your-org/standup-notes --public --description "Daily standup notes"
+   
+   # Or use an existing repository
+   ```
+
+2. **Ensure GitHub CLI has access**:
+   ```bash
+   # Authenticate GitHub CLI if not already done
+   gh auth login
+   
+   # Verify you have access to the standup repository
+   gh repo view your-org/standup-notes
+   ```
+
+3. **Configure standup-bot** with your repository details (see Quick Start below)
 
 ## Installation
 
@@ -64,6 +87,8 @@ go install github.com/standup-bot/standup-bot/cmd/standup-bot@latest
 
 ### 1. Initial Setup
 
+**Prerequisites**: Make sure you've completed the setup requirements above (repository created, GitHub CLI authenticated).
+
 Run the bot for the first time to configure:
 
 ```bash
@@ -72,6 +97,7 @@ standup-bot
 
 You'll be prompted for:
 - **GitHub Repository**: The repo where standups will be stored (e.g., `org/standup-repo`)
+  - ⚠️ This repository must already exist and you must have write access
 - **Your Name**: Used for your standup file and commit attribution
 
 Configuration is saved to `~/.standup-bot/config.json`.
