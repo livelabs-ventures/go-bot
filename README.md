@@ -111,6 +111,7 @@ This creates individual commits with the full standup in the commit message.
 | `standup-bot --direct` | Record standup using direct commit workflow |
 | `standup-bot --merge` | Merge today's standup pull request |
 | `standup-bot --config` | Reconfigure the bot (repository, name) |
+| `standup-bot --name alice` | Override configured name (useful for testing) |
 | `standup-bot --help` | Show help information |
 
 ## File Structure
@@ -270,6 +271,26 @@ standup-bot --config
 3. **Merge regularly**: Designate someone to merge at day's end
 4. **Review together**: Use merged PRs for team standup meetings
 5. **Keep history**: The markdown files serve as a searchable archive
+
+## Testing with Multiple Users
+
+To test the bot with multiple users without changing your configuration:
+
+```bash
+# Record standup as yourself
+standup-bot
+
+# Record standup as Alice (for testing)
+standup-bot --name alice
+
+# Record standup as Bob (for testing)
+standup-bot --name bob
+```
+
+This is useful for:
+- Testing the shared daily PR workflow
+- Demonstrating the tool to your team
+- Debugging multi-user scenarios
 
 ## Contributing
 

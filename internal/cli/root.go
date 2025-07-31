@@ -17,6 +17,7 @@ var (
 	configFlag bool
 	directFlag bool
 	mergeFlag  bool
+	nameFlag   string
 	rootCmd    = &cobra.Command{
 		Use:   "standup-bot",
 		Short: "A simple CLI tool for daily standup updates via GitHub",
@@ -31,6 +32,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&configFlag, "config", false, "Run configuration setup")
 	rootCmd.Flags().BoolVar(&directFlag, "direct", false, "Use direct commit workflow (multi-line commit message)")
 	rootCmd.Flags().BoolVar(&mergeFlag, "merge", false, "Merge today's standup pull request")
+	rootCmd.Flags().StringVar(&nameFlag, "name", "", "Override configured name (useful for testing)")
 }
 
 // Execute runs the root command
@@ -54,6 +56,12 @@ func runStandup(cmd *cobra.Command, args []string) error {
 	cfg, err := cfgManager.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Override name if flag is provided
+	if nameFlag != "" {
+		cfg.Name = nameFlag
+		fmt.Printf("Using name override: %s\n", nameFlag)
 	}
 
 	// Handle merge command
