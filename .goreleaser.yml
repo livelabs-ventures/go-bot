@@ -1,20 +1,8 @@
-# .goreleaser.yml
-# This is an example .goreleaser.yml file with some sensible defaults.
-# Make sure to check the documentation at https://goreleaser.com
-
-# The lines below are called `modelines`. See `:help modeline`
-# Feel free to remove those if you don't want/need to use them.
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj
-
 version: 2
 
 before:
   hooks:
-    # You may remove this if you don't use go modules.
     - go mod tidy
-    # you may remove this if you don't need go generate
-    - go generate ./...
 
 builds:
   - id: standup-bot
@@ -29,7 +17,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    # Customize ldflags
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
 
@@ -42,7 +29,9 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # Use zip for Darwin (macOS), tar.gz for others
+    builds:
+      - standup-bot
+    format: tar.gz
     format_overrides:
       - goos: windows
         format: zip
@@ -64,58 +53,10 @@ changelog:
       - '^test:'
       - '^chore:'
 
-# Create a Homebrew formula
-brews:
-  - name: standup-bot
-    ids:
-      - standup-bot
-    tap:
-      owner: livelabs-ventures
-      name: homebrew-tap
-      branch: main
-    
-    # GitHub repository where the formula will be pushed
-    url_template: "https://github.com/livelabs-ventures/go-bot/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-    
-    # Commit message template
-    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
-    
-    # Folder inside the repository to put the formula
-    folder: Formula
-    
-    # Caveats for the user of your binary
-    caveats: |
-      The standup-bot requires GitHub CLI (gh) to be installed and authenticated.
-      Install GitHub CLI:
-        brew install gh
-      
-      Then authenticate:
-        gh auth login
-    
-    # Your app's homepage
-    homepage: "https://github.com/livelabs-ventures/go-bot"
-    
-    # Your app's description
-    description: "CLI tool for managing daily standup updates via GitHub"
-    
-    # License
-    license: "MIT"
-    
-    # Dependencies
-    dependencies:
-      - name: gh
-        type: optional
-    
-    # Setting this will prevent goreleaser to actually try to commit the updated
-    # formula - instead, the formula file will be stored on the dist folder only,
-    # leaving the responsibility of publishing it to the user.
-    # If set to auto, the release will not be uploaded to the homebrew tap
-    # in case there is an indicator for prerelease in the tag e.g. v1.0.0-rc1
-    skip_upload: auto
-    
-    # Custom install script
-    install: |
-      bin.install "standup-bot"
-    
-    test: |
-      system "#{bin}/standup-bot", "--version"
+# GitHub/GitLab release
+release:
+  github:
+    owner: livelabs-ventures
+    name: go-bot
+  draft: false
+  prerelease: auto

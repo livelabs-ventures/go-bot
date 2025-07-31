@@ -30,6 +30,9 @@ type GetStandupStatusArgs struct{}
 
 // RunMCPServer starts the MCP server
 func RunMCPServer() error {
+	// Create a channel to keep the server running
+	done := make(chan struct{})
+
 	// Create MCP server with stdio transport
 	server := mcp.NewServer(
 		stdio.NewStdioServerTransport(),
@@ -71,7 +74,14 @@ func RunMCPServer() error {
 	fmt.Fprintln(os.Stderr, "Starting standup-bot MCP server...")
 
 	// Serve the MCP server
-	return server.Serve()
+	err = server.Serve()
+	if err != nil {
+		return fmt.Errorf("failed to start MCP server: %w", err)
+	}
+
+	// Block to keep the server running
+	<-done
+	return nil
 }
 
 // handleSubmitStandup handles the submit_standup tool
