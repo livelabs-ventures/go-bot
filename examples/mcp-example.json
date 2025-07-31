@@ -1,0 +1,35 @@
+{
+  "comment": "Example MCP tool calls for standup-bot",
+  "examples": [
+    {
+      "tool": "submit_standup",
+      "description": "Submit a daily standup",
+      "input": {
+        "yesterday": [
+          "Fixed authentication bug",
+          "Reviewed 3 pull requests",
+          "Updated documentation"
+        ],
+        "today": [
+          "Implement MCP server",
+          "Write unit tests",
+          "Deploy to staging"
+        ],
+        "blockers": "Waiting for API design approval",
+        "direct": false
+      }
+    },
+    {
+      "tool": "get_standup_status",
+      "description": "Check if standup is complete for today",
+      "input": {}
+    },
+    {
+      "tool": "create_standup_pr",
+      "description": "Create and merge standup PR",
+      "input": {
+        "merge": true
+      }
+    }
+  ]
+}

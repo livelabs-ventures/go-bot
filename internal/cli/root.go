@@ -14,7 +14,6 @@ var (
 	mergeFlag  bool
 	nameFlag   string
 	jsonFlag   string
-	suggestFlag bool
 	outputFlag string
 	rootCmd    = &cobra.Command{
 		Use:   "standup-bot",
@@ -45,6 +44,21 @@ Examples:
   standup-bot --direct --json '{"yesterday": ["Task A"], "today": ["Task B"]}' --output json`,
 		RunE: runStandup,
 	}
+	
+	mcpServerCmd = &cobra.Command{
+		Use:   "mcp-server",
+		Short: "Run the MCP (Model Context Protocol) server",
+		Long: `Starts the standup-bot MCP server using stdio transport.
+This allows AI assistants to interact with standup-bot functionality.
+
+The server exposes these tools:
+- submit_standup: Submit daily standup with yesterday/today/blockers
+- create_standup_pr: Create or manage standup pull requests
+- get_standup_status: Check if today's standup is complete`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commands.RunMCPServer()
+		},
+	}
 )
 
 func init() {
@@ -53,8 +67,10 @@ func init() {
 	rootCmd.Flags().BoolVar(&mergeFlag, "merge", false, "Merge today's standup pull request")
 	rootCmd.Flags().StringVar(&nameFlag, "name", "", "Override configured name (useful for testing)")
 	rootCmd.Flags().StringVar(&jsonFlag, "json", "", "Accept standup data as JSON (direct string, file path, or '-' for stdin)")
-	rootCmd.Flags().BoolVar(&suggestFlag, "suggest", false, "Analyze recent git commits and suggest standup content")
 	rootCmd.Flags().StringVar(&outputFlag, "output", "", "Output format: 'json' for machine-readable output")
+	
+	// Add subcommands
+	rootCmd.AddCommand(mcpServerCmd)
 }
 
 // Execute runs the root command
@@ -92,10 +108,6 @@ func runStandup(cmd *cobra.Command, args []string) error {
 		return commands.RunMergeDailyStandup(cfg)
 	}
 
-	// Handle suggest command
-	if suggestFlag {
-		return commands.RunStandupSuggest(cfg, outputFlag)
-	}
 
 	// Run the standup workflow
 	if directFlag {

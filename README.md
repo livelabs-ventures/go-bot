@@ -11,6 +11,7 @@ A simple and efficient CLI tool for managing daily standup updates via GitHub. T
 - 🎯 **Smart workflows** - Automatic branch management and PR creation
 - 💾 **Local configuration** - Stores preferences for quick daily use
 - 🛡️ **Error recovery** - Saves standups locally if push fails
+- 🤖 **MCP Server** - Model Context Protocol server for AI assistant integration
 
 ## Prerequisites
 
@@ -113,8 +114,8 @@ This creates individual commits with the full standup in the commit message.
 | `standup-bot --config` | Reconfigure the bot (repository, name) |
 | `standup-bot --name alice` | Override configured name (useful for testing) |
 | `standup-bot --json '{"yesterday":["item1"], "today":["item2"], "blockers":"None"}'` | Provide standup content as JSON |
-| `standup-bot --suggest` | Analyze recent commits and suggest standup content |
 | `standup-bot --output json` | Return results in JSON format for parsing |
+| `standup-bot mcp-server` | Run the MCP server for AI assistant integration |
 | `standup-bot --help` | Show help information |
 
 ## File Structure
@@ -319,42 +320,7 @@ Output example:
 }
 ```
 
-### Suggest from Git History
-
-Analyze recent commits to suggest standup content:
-
-```bash
-# Human-readable output
-standup-bot --suggest
-
-# JSON output for automation
-standup-bot --suggest --output json
-```
-
-The suggest feature:
-- Looks at commits from the last working day (skips weekends)
-- Extracts meaningful work items from commit messages
-- Filters out merge commits and trivial changes
-- Formats commit messages into standup-friendly items
-
 ### Automation Examples
-
-**Claude Code Integration:**
-```bash
-# Get suggestions and create standup
-SUGGESTIONS=$(standup-bot --suggest --output json)
-YESTERDAY=$(echo $SUGGESTIONS | jq -r '.yesterday | @json')
-standup-bot --json "{\"yesterday\": $YESTERDAY, \"today\": [\"Continue work\"], \"blockers\": \"None\"}" --output json
-```
-
-**Daily Cron Job:**
-```bash
-#!/bin/bash
-# Auto-generate standup from commits at 9 AM
-0 9 * * * standup-bot --suggest --output json | \
-  jq '{yesterday: .yesterday, today: ["Review PRs", "Continue yesterday work"], blockers: "None"}' | \
-  standup-bot --json "$(cat)" --output json
-```
 
 **CI/CD Pipeline:**
 ```bash
@@ -377,6 +343,39 @@ Errors are returned in JSON format when using `--output json`:
   "date": "2025-07-31"
 }
 ```
+
+## MCP Server Integration
+
+The standup-bot includes a Model Context Protocol (MCP) server that allows AI assistants like Claude to interact with standup functionality.
+
+### Running the MCP Server
+
+```bash
+standup-bot mcp-server
+```
+
+### Available MCP Tools
+
+- **submit_standup** - Submit daily standup with yesterday/today/blockers
+- **create_standup_pr** - Create or manage standup pull requests  
+- **get_standup_status** - Check if today's standup is complete
+
+### AI Assistant Configuration
+
+For Claude Desktop, add to your configuration:
+
+```json
+{
+  "mcpServers": {
+    "standup-bot": {
+      "command": "/path/to/standup-bot",
+      "args": ["mcp-server"]
+    }
+  }
+}
+```
+
+See [MCP Server Documentation](docs/MCP_SERVER.md) for detailed information.
 
 ## Testing with Multiple Users
 

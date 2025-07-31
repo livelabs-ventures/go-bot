@@ -32,16 +32,6 @@ type JSONOutput struct {
 	PRUrl     string    `json:"pr_url,omitempty"`
 }
 
-// JSONSuggestion represents suggested standup content
-type JSONSuggestion struct {
-	Date      string   `json:"date"`
-	Yesterday []string `json:"yesterday"`
-	Today     []string `json:"today"`
-	Blockers  string   `json:"blockers"`
-	Based_on  struct {
-		Commits []CommitInfo `json:"commits"`
-	} `json:"based_on"`
-}
 
 // CommitInfo represents information about a commit
 type CommitInfo struct {
@@ -110,11 +100,3 @@ func FormatJSONOutput(output JSONOutput) (string, error) {
 	return string(jsonBytes), nil
 }
 
-// FormatJSONSuggestion formats suggestions as JSON
-func FormatJSONSuggestion(suggestion JSONSuggestion) (string, error) {
-	jsonBytes, err := json.MarshalIndent(suggestion, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal JSON suggestion: %w", err)
-	}
-	return string(jsonBytes), nil
-}

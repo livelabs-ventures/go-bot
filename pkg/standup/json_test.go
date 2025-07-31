@@ -200,51 +200,6 @@ func TestFormatJSONOutput(t *testing.T) {
 	}
 }
 
-func TestFormatJSONSuggestion(t *testing.T) {
-	suggestion := JSONSuggestion{
-		Date:      "2025-07-31",
-		Yesterday: []string{"Implemented feature X", "Fixed bug Y"},
-		Today:     []string{"Write tests", "Review PRs"},
-		Blockers:  "None",
-	}
-	
-	// Add commit info
-	suggestion.Based_on.Commits = []CommitInfo{
-		{
-			SHA:     "abc1234",
-			Date:    "2025-07-30 14:30:00",
-			Author:  "Test User",
-			Message: "feat: Implement feature X",
-		},
-		{
-			SHA:     "def5678",
-			Date:    "2025-07-30 16:45:00",
-			Author:  "Test User",
-			Message: "fix: Fix bug Y",
-		},
-	}
-	
-	jsonStr, err := FormatJSONSuggestion(suggestion)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	
-	// Parse back to verify
-	var parsed JSONSuggestion
-	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
-		t.Fatalf("failed to parse suggestion JSON: %v", err)
-	}
-	
-	if len(parsed.Yesterday) != 2 {
-		t.Errorf("expected 2 yesterday items, got %d", len(parsed.Yesterday))
-	}
-	if len(parsed.Based_on.Commits) != 2 {
-		t.Errorf("expected 2 commits, got %d", len(parsed.Based_on.Commits))
-	}
-	if parsed.Based_on.Commits[0].SHA != "abc1234" {
-		t.Errorf("expected first commit SHA 'abc1234', got '%s'", parsed.Based_on.Commits[0].SHA)
-	}
-}
 
 // Helper function
 func contains(s, substr string) bool {
