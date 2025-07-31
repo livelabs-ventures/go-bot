@@ -112,6 +112,9 @@ This creates individual commits with the full standup in the commit message.
 | `standup-bot --merge` | Merge today's standup pull request |
 | `standup-bot --config` | Reconfigure the bot (repository, name) |
 | `standup-bot --name alice` | Override configured name (useful for testing) |
+| `standup-bot --json '{"yesterday":["item1"], "today":["item2"], "blockers":"None"}'` | Provide standup content as JSON |
+| `standup-bot --suggest` | Analyze recent commits and suggest standup content |
+| `standup-bot --output json` | Return results in JSON format for parsing |
 | `standup-bot --help` | Show help information |
 
 ## File Structure
@@ -271,6 +274,109 @@ standup-bot --config
 3. **Merge regularly**: Designate someone to merge at day's end
 4. **Review together**: Use merged PRs for team standup meetings
 5. **Keep history**: The markdown files serve as a searchable archive
+
+## Scriptable Mode
+
+The standup bot can be used programmatically by LLMs, scripts, and other automation tools.
+
+### JSON Input
+
+Provide standup content as JSON instead of interactive prompts:
+
+```bash
+standup-bot --json '{
+  "yesterday": ["Implemented user authentication", "Fixed login bug"],
+  "today": ["Write unit tests", "Start on user profile feature"],
+  "blockers": "None"
+}'
+```
+
+### JSON Output
+
+Get machine-readable output for parsing:
+
+```bash
+standup-bot --output json --json '{
+  "yesterday": ["Completed API endpoints"],
+  "today": ["Frontend integration"],
+  "blockers": "None"
+}'
+```
+
+Output example:
+```json
+{
+  "success": true,
+  "message": "Standup recorded successfully",
+  "date": "2025-07-31",
+  "user": "alice",
+  "yesterday": ["Completed API endpoints"],
+  "today": ["Frontend integration"],
+  "blockers": "None",
+  "file_path": "/home/alice/.standup-bot/repo/stand-ups/alice.md",
+  "pr_number": "42",
+  "pr_url": "https://github.com/org/standup-repo/pull/42"
+}
+```
+
+### Suggest from Git History
+
+Analyze recent commits to suggest standup content:
+
+```bash
+# Human-readable output
+standup-bot --suggest
+
+# JSON output for automation
+standup-bot --suggest --output json
+```
+
+The suggest feature:
+- Looks at commits from the last working day (skips weekends)
+- Extracts meaningful work items from commit messages
+- Filters out merge commits and trivial changes
+- Formats commit messages into standup-friendly items
+
+### Automation Examples
+
+**Claude Code Integration:**
+```bash
+# Get suggestions and create standup
+SUGGESTIONS=$(standup-bot --suggest --output json)
+YESTERDAY=$(echo $SUGGESTIONS | jq -r '.yesterday | @json')
+standup-bot --json "{\"yesterday\": $YESTERDAY, \"today\": [\"Continue work\"], \"blockers\": \"None\"}" --output json
+```
+
+**Daily Cron Job:**
+```bash
+#!/bin/bash
+# Auto-generate standup from commits at 9 AM
+0 9 * * * standup-bot --suggest --output json | \
+  jq '{yesterday: .yesterday, today: ["Review PRs", "Continue yesterday work"], blockers: "None"}' | \
+  standup-bot --json "$(cat)" --output json
+```
+
+**CI/CD Pipeline:**
+```bash
+# Include in GitHub Actions to track deployment activities
+standup-bot --json '{
+  "yesterday": ["Deployed version 1.2.3 to production"],
+  "today": ["Monitor metrics", "Address any issues"],
+  "blockers": "None"
+}' --output json
+```
+
+### Error Handling
+
+Errors are returned in JSON format when using `--output json`:
+
+```json
+{
+  "success": false,
+  "error": "failed to parse JSON input: unexpected end of JSON input",
+  "date": "2025-07-31"
+}
+```
 
 ## Testing with Multiple Users
 

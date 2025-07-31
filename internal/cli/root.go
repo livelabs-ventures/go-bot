@@ -13,12 +13,36 @@ var (
 	directFlag bool
 	mergeFlag  bool
 	nameFlag   string
+	jsonFlag   string
+	suggestFlag bool
+	outputFlag string
 	rootCmd    = &cobra.Command{
 		Use:   "standup-bot",
 		Short: "A simple CLI tool for daily standup updates via GitHub",
 		Long: `Standup Bot facilitates daily standup updates via GitHub.
 It collects standup information and commits it to a shared repository,
-where GitHub-Slack integration broadcasts updates to the team channel.`,
+where GitHub-Slack integration broadcasts updates to the team channel.
+
+The tool supports both interactive and scriptable modes for easy automation.
+
+Examples:
+  # Interactive mode (default)
+  standup-bot
+
+  # Direct JSON input
+  standup-bot --json '{"yesterday": ["Fixed bug"], "today": ["Write tests"], "blockers": "None"}'
+
+  # Read JSON from stdin
+  echo '{"yesterday": ["Fixed bug"], "today": ["Write tests"], "blockers": "None"}' | standup-bot --json -
+
+  # Read JSON from file
+  standup-bot --json standup.json
+
+  # Machine-readable output
+  standup-bot --json standup.json --output json
+
+  # Direct commit mode with JSON
+  standup-bot --direct --json '{"yesterday": ["Task A"], "today": ["Task B"]}' --output json`,
 		RunE: runStandup,
 	}
 )
@@ -28,6 +52,9 @@ func init() {
 	rootCmd.Flags().BoolVar(&directFlag, "direct", false, "Use direct commit workflow (multi-line commit message)")
 	rootCmd.Flags().BoolVar(&mergeFlag, "merge", false, "Merge today's standup pull request")
 	rootCmd.Flags().StringVar(&nameFlag, "name", "", "Override configured name (useful for testing)")
+	rootCmd.Flags().StringVar(&jsonFlag, "json", "", "Accept standup data as JSON (direct string, file path, or '-' for stdin)")
+	rootCmd.Flags().BoolVar(&suggestFlag, "suggest", false, "Analyze recent git commits and suggest standup content")
+	rootCmd.Flags().StringVar(&outputFlag, "output", "", "Output format: 'json' for machine-readable output")
 }
 
 // Execute runs the root command
@@ -65,9 +92,14 @@ func runStandup(cmd *cobra.Command, args []string) error {
 		return commands.RunMergeDailyStandup(cfg)
 	}
 
+	// Handle suggest command
+	if suggestFlag {
+		return commands.RunStandupSuggest(cfg, outputFlag)
+	}
+
 	// Run the standup workflow
 	if directFlag {
-		return commands.RunStandupDirect(cfg)
+		return commands.RunStandupDirect(cfg, jsonFlag, outputFlag)
 	}
-	return commands.RunStandupPR(cfg)
+	return commands.RunStandupPR(cfg, jsonFlag, outputFlag)
 }

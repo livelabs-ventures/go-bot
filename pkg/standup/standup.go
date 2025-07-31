@@ -150,6 +150,13 @@ func (m *Manager) SaveEntry(entry *Entry, userName string) error {
 	return m.fs.WriteFile(filePath, []byte(newContent), 0644)
 }
 
+// GetStandupFilePath returns the path to the standup file for a user
+func (m *Manager) GetStandupFilePath(userName string) (string, error) {
+	standupDir := filepath.Join(m.repoPath, "stand-ups")
+	fileName := fmt.Sprintf("%s.md", strings.ToLower(userName))
+	return filepath.Join(standupDir, fileName), nil
+}
+
 // ensureStandupFile ensures the standup directory exists and returns the file path
 func (m *Manager) ensureStandupFile(userName string) (string, error) {
 	standupDir := filepath.Join(m.repoPath, "stand-ups")

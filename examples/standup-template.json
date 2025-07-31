@@ -1,0 +1,15 @@
+{
+  "yesterday": [
+    "Completed feature X implementation",
+    "Fixed critical bug in authentication module",
+    "Reviewed 3 pull requests",
+    "Updated project documentation"
+  ],
+  "today": [
+    "Write unit tests for feature X",
+    "Start working on feature Y design",
+    "Team sync meeting at 2pm",
+    "Deploy feature X to staging"
+  ],
+  "blockers": "Waiting for API credentials from DevOps team"
+}
