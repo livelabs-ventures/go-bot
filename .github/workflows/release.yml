@@ -27,6 +27,13 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Debug directory structure
+        run: |
+          pwd
+          ls -la
+          ls -la cmd/
+          ls -la cmd/standup-bot/
+          
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:

@@ -3,6 +3,8 @@ package commands
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	mcp "github.com/metoro-io/mcp-golang"
@@ -30,9 +32,6 @@ type GetStandupStatusArgs struct{}
 
 // RunMCPServer starts the MCP server
 func RunMCPServer() error {
-	// Create a channel to keep the server running
-	done := make(chan struct{})
-
 	// Create MCP server with stdio transport
 	server := mcp.NewServer(
 		stdio.NewStdioServerTransport(),
@@ -70,18 +69,29 @@ func RunMCPServer() error {
 		return fmt.Errorf("failed to register get_standup_status tool: %w", err)
 	}
 
+	// Set up signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
 	// Log to stderr to avoid interfering with stdio transport
 	fmt.Fprintln(os.Stderr, "Starting standup-bot MCP server...")
 
-	// Serve the MCP server
-	err = server.Serve()
-	if err != nil {
-		return fmt.Errorf("failed to start MCP server: %w", err)
-	}
+	// Start server in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		if err := server.Serve(); err != nil {
+			errChan <- err
+		}
+	}()
 
-	// Block to keep the server running
-	<-done
-	return nil
+	// Wait for either an error or interrupt signal
+	select {
+	case err := <-errChan:
+		return fmt.Errorf("MCP server error: %w", err)
+	case <-sigChan:
+		fmt.Fprintln(os.Stderr, "Shutting down MCP server...")
+		return nil
+	}
 }
 
 // handleSubmitStandup handles the submit_standup tool
