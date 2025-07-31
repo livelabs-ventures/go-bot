@@ -385,21 +385,29 @@ func extractTodayStandup(content string, date time.Time) string {
 	
 	inTodaySection := false
 	var todayContent []string
+	sectionCount := 0
 	
 	for _, line := range lines {
-		// Check if we found today's date
-		if strings.Contains(line, dateStr) {
+		// Check if we found a date header matching today
+		if strings.HasPrefix(line, "## ") && strings.Contains(line, dateStr) {
 			inTodaySection = true
+			sectionCount++
+			// Only process the first matching section
+			if sectionCount > 1 {
+				break
+			}
 			continue
 		}
 		
-		// Check if we hit the next date section (stop collecting)
-		if inTodaySection && strings.HasPrefix(line, "## 20") {
-			break
+		// Check if we hit the next date section or separator (stop collecting)
+		if inTodaySection {
+			if strings.HasPrefix(line, "## ") || line == "---" {
+				break
+			}
 		}
 		
 		// Collect content for today
-		if inTodaySection && line != "---" {
+		if inTodaySection {
 			todayContent = append(todayContent, line)
 		}
 	}
