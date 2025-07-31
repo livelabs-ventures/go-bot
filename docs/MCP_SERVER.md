@@ -58,7 +58,14 @@ Check if today's standup has been completed.
 
 ### Claude Desktop Configuration
 
-To use with Claude Desktop, add the following to your Claude configuration:
+To integrate the standup-bot MCP server with Claude Desktop:
+
+1. **Locate your Claude Desktop configuration file:**
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+   - Linux: `~/.config/Claude/claude_desktop_config.json`
+
+2. **Edit the configuration file** to add the standup-bot MCP server:
 
 ```json
 {
@@ -69,6 +76,32 @@ To use with Claude Desktop, add the following to your Claude configuration:
     }
   }
 }
+```
+
+Replace `/path/to/standup-bot` with the actual path to your standup-bot executable.
+
+3. **Restart Claude Desktop** for the changes to take effect.
+
+### Claude Code Configuration
+
+The easiest way to add the standup-bot MCP server to Claude Code is using the CLI:
+
+```bash
+# Add globally (available in all projects)
+claude-code mcp add standup-bot /path/to/standup-bot --args "mcp-server"
+
+# Or add to current project only
+claude-code mcp add standup-bot /path/to/standup-bot --args "mcp-server" --project
+```
+
+To remove:
+```bash
+claude-code mcp remove standup-bot
+```
+
+To list all MCP servers:
+```bash
+claude-code mcp list
 ```
 
 ### Usage Example

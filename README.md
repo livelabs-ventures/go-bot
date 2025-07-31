@@ -166,6 +166,21 @@ Waiting for API design approval
 ---
 ```
 
+## MCP Server (AI Assistant Integration)
+
+The standup-bot includes an MCP (Model Context Protocol) server for integration with AI assistants like Claude.
+
+### Quick Setup with Claude Code
+
+```bash
+# Add the MCP server using Claude Code CLI
+claude-code mcp add standup-bot /path/to/standup-bot --args "mcp-server"
+```
+
+That's it! Now you can ask Claude to "submit my standup" and it will use the standup-bot directly.
+
+See [MCP Server Documentation](docs/MCP_SERVER.md) for full details.
+
 ## Configuration
 
 ### Config File Location
