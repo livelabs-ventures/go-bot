@@ -228,10 +228,21 @@ func runStandupWorkflowPR(cfg *config.Config) error {
 		return fmt.Errorf("failed to sync repository: %w", err)
 	}
 
-	// Switch to main branch first
-	if err := gitClient.SwitchToMainBranch(cfg.LocalRepoPath); err != nil {
-		// If main doesn't exist, we might be in an empty repo
-		// Continue anyway as the branch will be created
+	// Check if main branch exists locally or remotely
+	mainExistsLocal := gitClient.BranchExists(cfg.LocalRepoPath, "main")
+	mainExistsRemote := gitClient.RemoteBranchExists(cfg.LocalRepoPath, "main")
+	
+	if !mainExistsLocal && !mainExistsRemote {
+		// Create initial main branch if it doesn't exist anywhere
+		fmt.Println("Creating initial main branch...")
+		if err := createInitialMainBranch(cfg.LocalRepoPath, gitClient); err != nil {
+			return fmt.Errorf("failed to create initial main branch: %w", err)
+		}
+	} else if mainExistsLocal {
+		// Switch to main branch first
+		if err := gitClient.SwitchToMainBranch(cfg.LocalRepoPath); err != nil {
+			return fmt.Errorf("failed to switch to main branch: %w", err)
+		}
 	}
 
 	// Collect standup entry
@@ -413,6 +424,45 @@ func extractTodayStandup(content string, date time.Time) string {
 	}
 	
 	return strings.TrimSpace(strings.Join(todayContent, "\n"))
+}
+
+func createInitialMainBranch(repoPath string, gitClient *git.Client) error {
+	// Create a README file
+	readmePath := filepath.Join(repoPath, "README.md")
+	readmeContent := `# Team Standups
+
+This repository contains daily standup updates from the team.
+
+## Structure
+
+Each team member has their own markdown file in the ` + "`stand-ups/`" + ` directory.
+`
+	
+	if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {
+		return fmt.Errorf("failed to create README: %w", err)
+	}
+	
+	// Create stand-ups directory
+	standupDir := filepath.Join(repoPath, "stand-ups")
+	if err := os.MkdirAll(standupDir, 0755); err != nil {
+		return fmt.Errorf("failed to create stand-ups directory: %w", err)
+	}
+	
+	// Add, commit, and push
+	if _, err := gitClient.AddAll(repoPath); err != nil {
+		return fmt.Errorf("failed to add files: %w", err)
+	}
+	
+	if _, err := gitClient.Commit(repoPath, "Initial repository setup"); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
+	}
+	
+	// Push to create main branch on remote
+	if err := gitClient.PushBranch(repoPath, "main"); err != nil {
+		return fmt.Errorf("failed to push main branch: %w", err)
+	}
+	
+	return nil
 }
 
 func runMergeDailyStandup(cfg *config.Config) error {

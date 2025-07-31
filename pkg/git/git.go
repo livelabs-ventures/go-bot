@@ -261,6 +261,12 @@ func (c *Client) BranchExists(repoPath, branchName string) bool {
 	return err == nil && strings.TrimSpace(string(output)) != ""
 }
 
+// RemoteBranchExists checks if a branch exists on remote
+func (c *Client) RemoteBranchExists(repoPath, branchName string) bool {
+	output, err := c.runner.RunInDir(repoPath, "git", "ls-remote", "--heads", "origin", branchName)
+	return err == nil && strings.TrimSpace(string(output)) != ""
+}
+
 // SwitchToBranch switches to an existing branch
 func (c *Client) SwitchToBranch(repoPath, branchName string) error {
 	output, err := c.runner.RunInDir(repoPath, "git", "checkout", branchName)
