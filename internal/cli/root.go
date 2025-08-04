@@ -89,6 +89,8 @@ func SetVersionInfo(v, c, d string) {
 	version = v
 	commit = c
 	date = d
+	// Update the root command version after setting the version info
+	rootCmd.Version = buildVersion()
 }
 
 // buildVersion creates the version string
