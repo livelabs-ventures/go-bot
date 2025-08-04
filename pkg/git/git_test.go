@@ -440,3 +440,281 @@ func TestRepositoryExists(t *testing.T) {
 		t.Error("RepositoryExists() = true, want false for non-existent repo")
 	}
 }
+
+func TestPushBranchWithRetry(t *testing.T) {
+	repoPath := "/test/repo"
+	branchName := "feature-branch"
+
+	tests := []struct {
+		name     string
+		mocks    []MockCommand
+		wantErr  bool
+		errMatch string
+	}{
+		{
+			name: "successful push on first try",
+			mocks: []MockCommand{
+				{
+					Name:   "git",
+					Args:   []string{"push", "-u", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("Everything up-to-date"),
+					Error:  nil,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "non-fast-forward error then successful push after rebase",
+			mocks: []MockCommand{
+				{
+					Name:   "git",
+					Args:   []string{"push", "-u", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("! [rejected]        feature-branch -> feature-branch (non-fast-forward)"),
+					Error:  fmt.Errorf("exit status 1"),
+				},
+				{
+					Name:   "git",
+					Args:   []string{"fetch", "--all"},
+					Dir:    repoPath,
+					Output: []byte("Fetching origin"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"rebase", "origin/feature-branch"},
+					Dir:    repoPath,
+					Output: []byte("Successfully rebased"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"push", "-u", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("Everything up-to-date"),
+					Error:  nil,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "non-fast-forward error, rebase fails, merge succeeds",
+			mocks: []MockCommand{
+				{
+					Name:   "git",
+					Args:   []string{"push", "-u", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("! [rejected]        feature-branch -> feature-branch (non-fast-forward)"),
+					Error:  fmt.Errorf("exit status 1"),
+				},
+				{
+					Name:   "git",
+					Args:   []string{"fetch", "--all"},
+					Dir:    repoPath,
+					Output: []byte("Fetching origin"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"rebase", "origin/feature-branch"},
+					Dir:    repoPath,
+					Output: []byte("CONFLICT"),
+					Error:  fmt.Errorf("exit status 1"),
+				},
+				{
+					Name:   "git",
+					Args:   []string{"rebase", "--abort"},
+					Dir:    repoPath,
+					Output: []byte(""),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"merge", "origin/feature-branch", "--no-edit"},
+					Dir:    repoPath,
+					Output: []byte("Merge made"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"push", "-u", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("Everything up-to-date"),
+					Error:  nil,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "other error (not non-fast-forward)",
+			mocks: []MockCommand{
+				{
+					Name:   "git",
+					Args:   []string{"push", "-u", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("fatal: Authentication failed"),
+					Error:  fmt.Errorf("exit status 128"),
+				},
+			},
+			wantErr:  true,
+			errMatch: "Authentication failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &MockCommandRunner{
+				Commands: tt.mocks,
+			}
+			client := NewClientWithRunner(runner)
+
+			err := client.PushBranchWithRetry(repoPath, branchName)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PushBranchWithRetry() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMatch != "" && !strings.Contains(err.Error(), tt.errMatch) {
+				t.Errorf("PushBranchWithRetry() error = %v, should contain %v", err, tt.errMatch)
+			}
+		})
+	}
+}
+
+func TestCreateOrCheckoutBranch(t *testing.T) {
+	repoPath := "/test/repo"
+	branchName := "standup/2025-01-20"
+
+	tests := []struct {
+		name     string
+		mocks    []MockCommand
+		wantErr  bool
+		errMatch string
+	}{
+		{
+			name: "branch exists locally and remotely - sync successful",
+			mocks: []MockCommand{
+				{
+					Name:   "git",
+					Args:   []string{"fetch", "--all"},
+					Dir:    repoPath,
+					Output: []byte("Fetching origin"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"branch", "--list", branchName},
+					Dir:    repoPath,
+					Output: []byte("  standup/2025-01-20\n"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"checkout", branchName},
+					Dir:    repoPath,
+					Output: []byte("Switched to branch 'standup/2025-01-20'"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"ls-remote", "--heads", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("abc123 refs/heads/standup/2025-01-20"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"pull", "--rebase", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("Already up to date"),
+					Error:  nil,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "branch exists only remotely - checkout from remote",
+			mocks: []MockCommand{
+				{
+					Name:   "git",
+					Args:   []string{"fetch", "--all"},
+					Dir:    repoPath,
+					Output: []byte("Fetching origin"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"branch", "--list", branchName},
+					Dir:    repoPath,
+					Output: []byte(""),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"ls-remote", "--heads", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte("abc123 refs/heads/standup/2025-01-20"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"checkout", "-b", branchName, "origin/standup/2025-01-20"},
+					Dir:    repoPath,
+					Output: []byte("Branch 'standup/2025-01-20' set up to track remote branch"),
+					Error:  nil,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "branch doesn't exist - create new",
+			mocks: []MockCommand{
+				{
+					Name:   "git",
+					Args:   []string{"fetch", "--all"},
+					Dir:    repoPath,
+					Output: []byte("Fetching origin"),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"branch", "--list", branchName},
+					Dir:    repoPath,
+					Output: []byte(""),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"ls-remote", "--heads", "origin", branchName},
+					Dir:    repoPath,
+					Output: []byte(""),
+					Error:  nil,
+				},
+				{
+					Name:   "git",
+					Args:   []string{"checkout", "-b", branchName},
+					Dir:    repoPath,
+					Output: []byte("Switched to a new branch 'standup/2025-01-20'"),
+					Error:  nil,
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &MockCommandRunner{
+				Commands: tt.mocks,
+			}
+			client := NewClientWithRunner(runner)
+
+			err := client.CreateOrCheckoutBranch(repoPath, branchName)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CreateOrCheckoutBranch() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMatch != "" && !strings.Contains(err.Error(), tt.errMatch) {
+				t.Errorf("CreateOrCheckoutBranch() error = %v, should contain %v", err, tt.errMatch)
+			}
+		})
+	}
+}

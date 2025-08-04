@@ -226,11 +226,11 @@ func createOrUpdateStandupPR(cfg *config.Config, gitClient *git.Client, standupM
 		return nil, err
 	}
 
-	// Push the branch
+	// Push the branch with retry logic for non-fast-forward errors
 	if outputFormat != "json" {
 		fmt.Println("Pushing branch...")
 	}
-	if err := gitClient.PushBranch(cfg.LocalRepoPath, branchName); err != nil {
+	if err := gitClient.PushBranchWithRetry(cfg.LocalRepoPath, branchName); err != nil {
 		tempFile := saveTempStandup(entry, cfg.Name)
 		return nil, fmt.Errorf("failed to push changes: %w\nYour standup has been saved to: %s", err, tempFile)
 	}
@@ -246,29 +246,20 @@ func handleBranch(repoPath string, gitClient *git.Client, branchName string) err
 
 // handleBranchWithOutput creates or switches to the standup branch with optional output format
 func handleBranchWithOutput(repoPath string, gitClient *git.Client, branchName string, outputFormat string) error {
-	if gitClient.BranchExists(repoPath, branchName) {
-		if outputFormat != "json" {
-			fmt.Println("Switching to today's standup branch...")
-		}
-		if err := gitClient.SwitchToBranch(repoPath, branchName); err != nil {
-			return fmt.Errorf("failed to switch to branch: %w", err)
-		}
-		
-		if outputFormat != "json" {
-			fmt.Println("Pulling latest updates...")
-		}
-		if err := gitClient.PullBranch(repoPath, branchName); err != nil {
-			if outputFormat != "json" {
-				fmt.Println("Note: Could not pull from remote branch (this is normal for new branches)")
-			}
-		}
-	} else {
-		if outputFormat != "json" {
-			fmt.Println("Creating today's standup branch...")
-		}
-		if err := gitClient.CreateBranch(repoPath, branchName); err != nil {
-			return fmt.Errorf("failed to create branch: %w", err)
-		}
+	if outputFormat != "json" {
+		fmt.Println("Setting up standup branch...")
+	}
+	
+	// Use the new CreateOrCheckoutBranch method which handles all scenarios:
+	// - Creates new branch if it doesn't exist
+	// - Checks out existing local branch and syncs with remote
+	// - Checks out remote branch if it exists but not locally
+	if err := gitClient.CreateOrCheckoutBranch(repoPath, branchName); err != nil {
+		return fmt.Errorf("failed to setup branch: %w", err)
+	}
+	
+	if outputFormat != "json" {
+		fmt.Println("Branch ready!")
 	}
 	return nil
 }

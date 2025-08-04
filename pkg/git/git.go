@@ -269,10 +269,44 @@ func (c *Client) ensureBranch(repoPath string) (string, error) {
 
 // pushWithUpstream pushes the branch and sets upstream if needed
 func (c *Client) pushWithUpstream(repoPath, branch string) error {
+	// First attempt to push
 	output, err := c.runner.RunInDir(repoPath, "git", "push", "-u", "origin", branch)
-	if err != nil {
-		return fmt.Errorf("%w (output: %s)", err, string(output))
+	if err == nil {
+		return nil // Success
 	}
+	
+	// Check if it's a non-fast-forward error
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "non-fast-forward") && !strings.Contains(outputStr, "rejected") {
+		return fmt.Errorf("%w (output: %s)", err, outputStr)
+	}
+	
+	// Non-fast-forward error detected, fetch and retry
+	if err := c.fetchAll(repoPath); err != nil {
+		return fmt.Errorf("failed to fetch during push retry: %w", err)
+	}
+	
+	// Try to pull with rebase
+	pullOutput, pullErr := c.runner.RunInDir(repoPath, "git", "pull", "--rebase", "origin", branch)
+	if pullErr != nil {
+		// If pull fails, might be due to conflicts
+		// Try to abort rebase and merge instead
+		c.runner.RunInDir(repoPath, "git", "rebase", "--abort")
+		
+		// Try merge as fallback
+		mergeOutput, mergeErr := c.runner.RunInDir(repoPath, "git", "merge", fmt.Sprintf("origin/%s", branch), "--no-edit")
+		if mergeErr != nil {
+			return fmt.Errorf("failed to sync before push (tried rebase and merge): pull error: %s, merge error: %w (output: %s)", 
+				string(pullOutput), mergeErr, string(mergeOutput))
+		}
+	}
+	
+	// Try pushing again
+	output, err = c.runner.RunInDir(repoPath, "git", "push", "-u", "origin", branch)
+	if err != nil {
+		return fmt.Errorf("push failed after sync: %w (output: %s)", err, string(output))
+	}
+	
 	return nil
 }
 
@@ -298,6 +332,48 @@ func (c *Client) PushBranch(repoPath, branchName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to push branch: %w\nOutput: %s", err, string(output))
 	}
+	return nil
+}
+
+// PushBranchWithRetry pushes a branch to remote with automatic fetch and rebase on non-fast-forward errors
+func (c *Client) PushBranchWithRetry(repoPath, branchName string) error {
+	// First attempt to push
+	output, err := c.runner.RunInDir(repoPath, "git", "push", "-u", "origin", branchName)
+	if err == nil {
+		return nil // Success on first try
+	}
+	
+	// Check if it's a non-fast-forward error
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "non-fast-forward") && !strings.Contains(outputStr, "rejected") {
+		return fmt.Errorf("failed to push branch: %w\nOutput: %s", err, outputStr)
+	}
+	
+	// Fetch the latest changes from remote
+	if err := c.fetchAll(repoPath); err != nil {
+		return fmt.Errorf("failed to fetch remote changes during retry: %w", err)
+	}
+	
+	// Try to rebase on top of the remote branch
+	rebaseOutput, rebaseErr := c.runner.RunInDir(repoPath, "git", "rebase", fmt.Sprintf("origin/%s", branchName))
+	if rebaseErr != nil {
+		// If rebase fails, try to abort and merge instead
+		c.runner.RunInDir(repoPath, "git", "rebase", "--abort")
+		
+		// Try merge as fallback
+		mergeOutput, mergeErr := c.runner.RunInDir(repoPath, "git", "merge", fmt.Sprintf("origin/%s", branchName), "--no-edit")
+		if mergeErr != nil {
+			return fmt.Errorf("failed to sync with remote branch (tried rebase and merge): rebase error: %s, merge error: %w\nOutput: %s", 
+				string(rebaseOutput), mergeErr, string(mergeOutput))
+		}
+	}
+	
+	// Try pushing again after syncing
+	output, err = c.runner.RunInDir(repoPath, "git", "push", "-u", "origin", branchName)
+	if err != nil {
+		return fmt.Errorf("failed to push branch after syncing: %w\nOutput: %s", err, string(output))
+	}
+	
 	return nil
 }
 
@@ -397,6 +473,55 @@ func (c *Client) SwitchToBranch(repoPath, branchName string) error {
 		return fmt.Errorf("failed to switch to branch: %w\nOutput: %s", err, string(output))
 	}
 	return nil
+}
+
+// CreateOrCheckoutBranch creates a new branch or checks out an existing one (local or remote)
+func (c *Client) CreateOrCheckoutBranch(repoPath, branchName string) error {
+	// First, fetch all remote branches to ensure we have the latest
+	if err := c.fetchAll(repoPath); err != nil {
+		return fmt.Errorf("failed to fetch remote branches: %w", err)
+	}
+	
+	// Check if branch exists locally
+	if c.BranchExists(repoPath, branchName) {
+		// Branch exists locally, just switch to it
+		if err := c.SwitchToBranch(repoPath, branchName); err != nil {
+			return err
+		}
+		
+		// If remote branch exists, ensure we're up to date
+		if c.RemoteBranchExists(repoPath, branchName) {
+			// Pull latest changes (with rebase to avoid merge commits)
+			output, err := c.runner.RunInDir(repoPath, "git", "pull", "--rebase", "origin", branchName)
+			if err != nil {
+				// If pull fails, it might be due to conflicts or diverged branches
+				// Try to reset to remote state
+				resetOutput, resetErr := c.runner.RunInDir(repoPath, "git", "reset", "--hard", fmt.Sprintf("origin/%s", branchName))
+				if resetErr != nil {
+					return fmt.Errorf("failed to sync with remote branch: pull error: %w (output: %s), reset error: %w (output: %s)", 
+						err, string(output), resetErr, string(resetOutput))
+				}
+			}
+		}
+		return nil
+	}
+	
+	// Branch doesn't exist locally, check if it exists remotely
+	if c.RemoteBranchExists(repoPath, branchName) {
+		// Create local branch tracking the remote
+		output, err := c.runner.RunInDir(repoPath, "git", "checkout", "-b", branchName, fmt.Sprintf("origin/%s", branchName))
+		if err != nil {
+			// If that fails, try just checking out the remote branch (Git will create tracking branch)
+			output2, err2 := c.runner.RunInDir(repoPath, "git", "checkout", branchName)
+			if err2 != nil {
+				return fmt.Errorf("failed to checkout remote branch: %w (output: %s, %s)", err2, string(output), string(output2))
+			}
+		}
+		return nil
+	}
+	
+	// Branch doesn't exist locally or remotely, create it
+	return c.CreateBranch(repoPath, branchName)
 }
 
 // PullBranch pulls changes from remote branch
